@@ -15,6 +15,7 @@ type story struct {
 		Choices     []string 	`json:"choices"`
 		Branch      string   	`json:"branch"`
 		DisplayText string   	`json:"displayText"`
+		Chest		string		`json:"chest"`
 	} 							`json:"data"`
 }
 

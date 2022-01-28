@@ -1,12 +1,12 @@
 package bot
 
 import (
-	"fmt"                   //to print errors
-	"mmorpg-bot/src/config" //importing our config package which we have created above
+	"fmt"
+	"github.com/bwmarrin/discordgo"
+	"github.com/gomodule/redigo/redis"
+	"mmorpg-bot/src/config"
 	"mmorpg-bot/src/helpers"
 	"mmorpg-bot/src/services"
-	"github.com/gomodule/redigo/redis"
-	"github.com/bwmarrin/discordgo" //discordgo package from the repo of bwmarrin .
 )
 
 var BotId string
@@ -41,6 +41,7 @@ func Start() {
 	goBot.AddHandler(reactionAddListener)
 
 	err = goBot.Open()
+
 	//Error handling
 	if err != nil {
 		fmt.Println(err.Error())
@@ -57,7 +58,7 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if m.Content == "bot help" {
-		msg, _ := s.ChannelMessageSend(m.ChannelID, "You have pressed help\n\nCommands:\ninfo - Get your current details\nshop - Open shop\nswitch - switch to Co-op/Single-player\nstory - Advance to the next story point\ndungeon - Starts duel with npc ranked similar to you")
+		msg, _ := s.ChannelMessageSend(m.ChannelID, "You have pressed help\n\nCommands:\ninfo - Get your current details\nshop - Open shop\nswitch - switch to Co-op/Single-player\nstory - Advance to the next story point\ndungeon - Starts duel with npc ranked similar to you\ndaily - Collect your daily reward\ni - Open your inventory")
 		s.MessageReactionAdd(msg.ChannelID, msg.ID, "⏩")
 	}
 
@@ -75,12 +76,14 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, "Failed")
 		}
-		sendText := fmt.Sprintf("The beginning\n\n%s", res.Data.DisplayText)
-		msg, _ := s.ChannelMessageSend(m.ChannelID, sendText)
+		// sendText := fmt.Sprintf("The beginning\n\n%s", res.Data.DisplayText)
+		msg, _ := s.ChannelMessageSend(m.ChannelID, res.Data.DisplayText)
 		s.MessageReactionAdd(msg.ChannelID, msg.ID, "⏩")
-		fmt.Println(m.Author.ID)
 		client := pool.Get()
 		_, err = client.Do("SET", msg.ID, m.Author.ID, "EX", "15")
+		if res.Data.StoryType == "chest" {
+			s.MessageReactionAdd(msg.ChannelID, m.ID, "🎁")
+		}
 		if err != nil {
 			panic(err)
 		}
@@ -93,14 +96,35 @@ func reactionAddListener(s *discordgo.Session, r *discordgo.MessageReactionAdd) 
 		return
 	}
 
-	msg, err := redis.String(client.Do("GET", r.MessageID))
-	if err != nil {
-		panic(err)
+	if r.Emoji.Name == "🎁" {
+		msg, err := redis.String(client.Do("GET", r.MessageID))
+		if err != nil {
+			return
+		}
+		res, _ := services.OpenChest(r.UserID, msg)
+		responseString := fmt.Sprintf("XP: +%d\nCoins: +%d", res.Data.XP, res.Data.Coins)
+		for _, item := range res.Data.Contents { //discordgo package from the repo of b //discordgo package  //discordgo package from the repo of bwmarrin .from the repo of bwmarrin .wmarrin .
+			responseString = fmt.Sprintf("%s\n%s", responseString, item.Name)
+		}
+		m, _ := s.ChannelMessageSend(r.ChannelID, responseString)
+		s.MessageReactionAdd(m.ChannelID, m.ID, "⏩")
 	}
 
-	if r.UserID != msg{
-		return
+	if r.Emoji.Name == "⏩" {
+		msg, err := redis.String(client.Do("GET", r.MessageID))
+		if err != nil {
+			return
+		}
+
+		if r.UserID != msg {
+			return
+		}
+
+		res, _ := services.AdvanceStory(r.UserID)
+		m, _ := s.ChannelMessageSend(r.ChannelID, res.Data.DisplayText)
+		client.Do("SET", m.ID, res.Data.Chest, "EX", 15)
+		if res.Data.StoryType == "chest" {
+			s.MessageReactionAdd(r.ChannelID, m.ID, "🎁")
+		}
 	}
-	res,_:=services.AdvanceStory(r.UserID)
-	s.ChannelMessageEdit(r.ChannelID,r.MessageID,res.Data.DisplayText)
 }
