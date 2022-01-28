@@ -17,6 +17,9 @@ jobs:
       - run:
           name: "Install deps"
           command: "go get -d -v ./..."
+      - run:
+          name: "Build"
+          command: "go build ."
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
