@@ -16,7 +16,7 @@ jobs:
       - checkout
       - run:
           name: "Install deps"
-          command: "make deps"
+          command: "go get -d -v ./..."
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
